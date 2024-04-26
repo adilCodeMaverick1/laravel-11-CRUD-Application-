@@ -1,4 +1,5 @@
 <x-layout>
+@include('blogs.nav')
     <a href="/blog/create" class="btn btn-dark m-3">Create</a>
     <table class="table">
         <thead>

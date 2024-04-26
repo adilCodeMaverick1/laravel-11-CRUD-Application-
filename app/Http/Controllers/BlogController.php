@@ -36,7 +36,7 @@ class BlogController extends Controller
             "description"=>"required | string",
 
         ]);
-        $data["user_id"] = 1;
+        $data["user_id"] = 2;
         blogs::create($data);
 
         return to_route('blog.index')->with("success","Blog created succesfuly");
@@ -91,4 +91,19 @@ class BlogController extends Controller
         $blog->delete();
         return to_route('blog.index')->with("success","blogs deleted succesfully");
     }
+    // public function search(Request $request)
+    // {
+    //     $name = $request->input('name');
+    //   $data=blogs::where("title","like","%".$name."%")->get();
+    //     return view('blogs.search',['data'=>$data]);
+    // }
+    public function search(Request $request){
+        $name= $request->validate([
+            "name"=>"required | string"
+        ]);
+        $name = $request->input('name');
+        $data = blogs::where('title', 'like', "%$name%")->get();
+        return view('blogs.search', ['data' => $data]);
+    }
+    
 }
