@@ -63,8 +63,10 @@
                         </tr>
                     @endforeach
                 </tbody>
+                
             </table>
         </div>
+   
     @elseif(isset($reports) && $reports->isEmpty())
         <div class="alert alert-success">No reports found.</div>
     @endif

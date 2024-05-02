@@ -27,19 +27,26 @@ class ReportController extends Controller
 //     }
 public function generateReport(Request $request)
 {
-    $startDate = $request->start_date;
-    $endDate = $request->end_date;
-    $userId=$request->user_id;
+    // Validate the request data
+    $validatedData = $request->validate([
+        'start_date' => 'required|date',
+        'end_date' => 'required|date|after_or_equal:start_date',
+        'user_id' => 'required|numeric',
+    ]);
 
-    // $reports = blogs::whereDate('created_at', '>=', $startDate)
-    //                  ->whereDate('created_at', '<=', $endDate)
-    //                  ->get();
+    $startDate = $validatedData['start_date'];
+    $endDate = $validatedData['end_date'];
+    $userId = $validatedData['user_id'];
+
     $reports = blogs::whereDate('created_at', '<=', $endDate)
     ->whereDate('created_at', '>=', $startDate)
     ->where('user_id', $userId)
     ->get();
+
+   
     $dd_user = Blogs::distinct('user_id')->pluck('user_id');
-    return view('report.index', ['reports' => $reports,'dd_user' => $dd_user]);
+    
+    return view('report.index', ['reports' => $reports, 'dd_user' => $dd_user]);
 }
 
 

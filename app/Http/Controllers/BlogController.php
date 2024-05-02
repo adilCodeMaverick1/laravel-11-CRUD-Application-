@@ -1,9 +1,11 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Events\NewBlogPost;
 
 use App\Models\blogs;
 use Illuminate\Http\Request;
+
 
 class BlogController extends Controller
 {
@@ -31,14 +33,23 @@ class BlogController extends Controller
     public function store(Request $request)
     {
 
-      $data =$request->validate([
+      $post_data =$request->validate([
             "title"=>"required | string",
             "description"=>"required | string",
 
         ]);
-        $data["user_id"] = 2;
-        blogs::create($data);
+        $post_data["user_id"] = auth()->id();
 
+         blogs::create($post_data);
+        
+        $data = [
+            'title' => $post_data['title'],
+            'description' => $post_data['description'],
+            'user_id' => $post_data['user_id'], // Assuming 'user_id' is a field in your 'blogs' table
+        ];
+        
+    
+        event(new NewBlogPost($data));
         return to_route('blog.index')->with("success","Blog created succesfuly");
         // $post = new blogs();
         // $post->title = $request->title;

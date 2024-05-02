@@ -1,3 +1,4 @@
+<x-app-layout>
 <x-layout>
 @include('blogs.nav')
     <a href="/blog/create" class="btn btn-dark m-3">Create</a>
@@ -30,7 +31,24 @@
     <div class="pagination svg container">
         {{ $blogs->links() }}
     </div>
+    <script>
+
+// Enable pusher logging - don't include this in production
+Pusher.logToConsole = true;
+
+var pusher = new Pusher('1eaefba807a759b322f9', {
+  cluster: 'ap2'
+});
+
+var channel = pusher.subscribe('my-channel1');
+channel.bind('my-event2', function(data) {
+  alert(JSON.stringify(data));
+  console.log('Successfully subscribed to channel');
+
+});
+</script>
 </x-layout>
+</x-app-layout>
 <style>
     .pagination svg {
     width: 1rem;
