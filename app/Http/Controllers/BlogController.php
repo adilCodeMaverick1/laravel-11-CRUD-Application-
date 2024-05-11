@@ -116,5 +116,8 @@ class BlogController extends Controller
         $data = blogs::where('title', 'like', "%$name%")->get();
         return view('blogs.search', ['data' => $data]);
     }
+    public function check(){
+        return view('check.index');
+    }
     
 }
