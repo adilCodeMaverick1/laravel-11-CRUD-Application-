@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Events\NewBlogPost;
 
 use App\Models\blogs;
+use App\Models\Product;
 use Illuminate\Http\Request;
 
 
@@ -116,8 +117,37 @@ class BlogController extends Controller
         $data = blogs::where('title', 'like', "%$name%")->get();
         return view('blogs.search', ['data' => $data]);
     }
-    public function check(){
-        return view('check.index');
+    public function check(Request $request){
+        $name= $request->validate([
+            "name"=>"required | string"
+        ]);
+        $name = $request->input('name');
+        $data = blogs::where('title', 'like', "%$name%")->get();
+        return view('blogs.search',compact('data'));
+    }
+    public function addpropage(){
+        $products = Product::get();
+        return view('check.index',compact('products'));
+    }
+    public function addProduct(Request $request)
+    {
+        $productId = $request->input('productId');
+        $product = Product::find($productId);
+    
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
+    
+        // Add product to the session
+        $cart = session()->get('cart', []);
+        $cart[] = $product;
+        session()->put('cart', $cart);
+    
+        // Get all products in the cart
+        $allProducts = session()->get('cart', []);
+    
+        return response()->json(['products' => $allProducts]);
     }
     
+
 }
