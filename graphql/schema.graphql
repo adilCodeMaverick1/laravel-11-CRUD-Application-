@@ -1,0 +1,24 @@
+# graphql/schema.graphql
+
+scalar DateTime
+    @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\DateTime")
+
+type Blog {
+    id: ID!
+    title: String!
+    description: String!
+}
+
+type Query {
+    blog(id: ID! @whereKey): Blog @find(model: "App\\Models\\blogs")
+    blogs(first: Int, page: Int): [Blog!]!
+        @paginate(type: "PAGINATOR", model: "App\\Models\\blogs")
+}
+
+type Mutation {
+    createBlog(title: String!, description: String!, user_id: ID!): Blog
+        @create(model: "App\\Models\\blogs")
+    updateBlog(id: ID!, title: String, description: String, user_id: ID): Blog
+        @update(model: "App\\Models\\blogs")
+    deleteBlog(id: ID!): Blog @delete(model: "App\\Models\\blogs")
+}
