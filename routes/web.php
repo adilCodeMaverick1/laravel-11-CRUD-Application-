@@ -6,13 +6,24 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PhotoController;
-
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\RazorpayController;
 
 
 Route::get('dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+
+// Route for initiating the payment from your checkout page
+Route::get('/checkout/now', [PaymentController::class, 'pageCheckout'])->name('payment.page');
+
+Route::post('/checkout/pay', [PaymentController::class, 'initiatePayment'])->name('payment.initiate');
+
+// Routes for handling PayFast callbacks
+Route::get('/payment/success', [PaymentController::class, 'handleSuccess'])->name('payment.success');
+Route::get('/payment/cancel', [PaymentController::class, 'handleCancel'])->name('payment.cancel');
+Route::post('/payment/notify', [PaymentController::class, 'handleNotification'])->name('payment.notify');
 Route::middleware('auth')->group(function () {
     Route::resource("blog", BlogController::class);
     Route::get('/', [BlogController::class, 'index']);
@@ -110,4 +121,8 @@ Route::middleware('auth')->group(function () {
     });
 });
 
+
+Route::get('/razorpay', [RazorpayController::class, 'index']);
+Route::post('/razorpay/payment', [RazorpayController::class, 'payment'])->name('razorpay.payment');
+Route::post('/razorpay/success', [RazorpayController::class, 'success'])->name('razorpay.success');
 require __DIR__ . '/auth.php';
