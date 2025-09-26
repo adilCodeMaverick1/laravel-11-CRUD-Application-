@@ -125,4 +125,7 @@ Route::middleware('auth')->group(function () {
 Route::get('/razorpay', [RazorpayController::class, 'index']);
 Route::post('/razorpay/payment', [RazorpayController::class, 'payment'])->name('razorpay.payment');
 Route::post('/razorpay/success', [RazorpayController::class, 'success'])->name('razorpay.success');
+
+//safepay
+Route::get('/safepay', [PaymentController::class, 'SafepayCheckout'])->name('safepay.page');
 require __DIR__ . '/auth.php';

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Safepay\SafepayClient;
 
 class PaymentController extends Controller
 {
@@ -125,5 +126,86 @@ class PaymentController extends Controller
         }
 
         return response('OK', 200);
+    }
+
+
+    // public function SafepayCheckout(Request $request)
+    // {
+    //     try {
+    //         $safepay = new SafepayClient([
+    //             'api_key' => env('SAFEPAY_API_KEY'),  // sec_ key for auth
+    //             'api_base' => env('SAFEPAY_API_BASE'),  // Correct URL
+    //         ]);
+
+    //         // Validate request data (e.g., amount from cart)
+    //         // $validated = $request->validate([
+    //         //     'amount' => 'required|numeric|min:100',  // In paisa
+    //         // ]);
+
+    //         // Create payment session
+    //         $tracker = $safepay->order->setup([
+    //             'merchant_api_key' => env('SAFEPAY_API_KEY'),  // Same sec_ key
+    //             'intent' => 'CYBERSOURCE',  // For card payments
+    //             'mode' => 'payment',  // Use 'unscheduled_cof' if needed
+    //             'currency' => 'PKR',
+    //             'amount' => 130 * 100,  // Convert to paisa if input is in PKR
+    //         ]);
+
+    //         // Return tracker to frontend (Nuxt)
+    //         return response()->json([
+    //             'tracker' => $tracker->tracker->token,  // e.g., "track_xxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         // Handle errors (e.g., log and return error response)
+    //         return response()->json(['error' => $e->getMessage()], 500);
+    //     }
+    // }
+
+    public function SafepayCheckout(Request $request)
+    {
+        try {
+            $safepay = new SafepayClient([
+                'api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_) for order setup
+                'api_base' => env('SAFEPAY_API_BASE'),
+            ]);
+
+            // Validate amount (in PKR)
+            // $validated = $request->validate([
+            //     'amount' => 'required|numeric|min:1',
+            // ]);
+
+            // Create payment session (tracker)
+            $session = $safepay->order->setup([
+                'merchant_api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_)
+                'intent' => 'CYBERSOURCE',
+                'mode' => 'payment',
+                'currency' => 'PKR',
+                'amount' => 110 * 100,  // Convert to paisa
+            ]);
+
+            // Create separate client for passport with secret key
+            $safepay_passport = new SafepayClient([
+                'api_key' => env('SAFEPAY_SECRET_KEY'),  // Secret key (hex) for passport auth
+                'api_base' => env('SAFEPAY_API_BASE'),
+            ]);
+
+            // Create temporary bearer token (TBT)
+            $tbt = $safepay_passport->passport->create();
+
+            // Construct hosted redirect URL
+            $checkoutURL = \Safepay\Checkout::constructURL([
+                'environment' => 'sandbox',
+                'tracker' => $session->tracker->token,
+                'tbt' => $tbt->token,
+                'source' => 'website',
+                'cancel_url' => 'https://pakfumes.com/cancel',
+                'redirect_url' => 'https://pakfumes.com/success'
+            ]);
+
+            // Return URL to frontend
+            return response()->json(['url' => $checkoutURL]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }
