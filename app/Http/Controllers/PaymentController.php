@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Safepay\SafepayClient;
+use App\Models\Order;
+use Safepay\Checkout;
+use Illuminate\Support\Facades\Http;
 
 class PaymentController extends Controller
 {
@@ -161,51 +164,263 @@ class PaymentController extends Controller
     //     }
     // }
 
+    // public function SafepayCheckout(Request $request)
+    // {
+    //     try {
+    //         $safepay = new SafepayClient([
+    //             'api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_) for order setup
+    //             'api_base' => env('SAFEPAY_API_BASE'),
+    //         ]);
+
+    //         // Validate amount (in PKR)
+    //         // $validated = $request->validate([
+    //         //     'amount' => 'required|numeric|min:1',
+    //         // ]);
+
+    //         // Create payment session (tracker)
+    //         $session = $safepay->order->setup([
+    //             'merchant_api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_)
+    //             'intent' => 'CYBERSOURCE',
+    //             'mode' => 'payment',
+    //             'currency' => 'PKR',
+    //             'amount' => 110 * 100,  // Convert to paisa
+    //         ]);
+
+    //         // Create separate client for passport with secret key
+    //         $safepay_passport = new SafepayClient([
+    //             'api_key' => env('SAFEPAY_SECRET_KEY'),  // Secret key (hex) for passport auth
+    //             'api_base' => env('SAFEPAY_API_BASE'),
+    //         ]);
+
+    //         // Create temporary bearer token (TBT)
+    //         $tbt = $safepay_passport->passport->create();
+
+    //         // Construct hosted redirect URL
+    //         $checkoutURL = \Safepay\Checkout::constructURL([
+    //             'environment' => 'sandbox',
+    //             'tracker' => $session->tracker->token,
+    //             'tbt' => $tbt->token,
+    //             'source' => 'website',
+    //             'cancel_url' => 'https://pakfumes.com/cancel',
+    //             'redirect_url' => 'https://pakfumes.com/success'
+    //         ]);
+
+    //         // Return URL to frontend
+    //         return response()->json(['url' => $checkoutURL]);
+    //     } catch (\Exception $e) {
+    //         return response()->json(['error' => $e->getMessage()], 500);
+    //     }
+    // }
     public function SafepayCheckout(Request $request)
     {
         try {
+            $request->validate([
+                'amount' => 'required|numeric|min:1',
+                'vendor_id' => 'required|integer',
+            ]);
+
+            $amountPaisa = (int) round($request->amount * 100);
+
+            // 1) Create pending order
+            $order = Order::create([
+                'vendor_id' => $request->vendor_id,
+                'user_id' => 1,
+                'amount' => $amountPaisa,
+                'status' => 'pending',
+                'payment_method' => 'safepay',
+            ]);
+
+            // 2) Safepay client (public key)
             $safepay = new SafepayClient([
-                'api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_) for order setup
+                'api_key' => env('SAFEPAY_API_KEY'),
                 'api_base' => env('SAFEPAY_API_BASE'),
             ]);
 
-            // Validate amount (in PKR)
-            // $validated = $request->validate([
-            //     'amount' => 'required|numeric|min:1',
-            // ]);
-
-            // Create payment session (tracker)
             $session = $safepay->order->setup([
-                'merchant_api_key' => env('SAFEPAY_API_KEY'),  // Public key (sec_)
+                'merchant_api_key' => env('SAFEPAY_API_KEY'),
                 'intent' => 'CYBERSOURCE',
                 'mode' => 'payment',
                 'currency' => 'PKR',
-                'amount' => 110 * 100,  // Convert to paisa
+                'amount' => $amountPaisa,
             ]);
 
-            // Create separate client for passport with secret key
+            // 3) Save tracker to order
+            $order->update(['tracker' => $session->tracker->token]);
+
+            // 4) Secret key for passport (TBT)
             $safepay_passport = new SafepayClient([
-                'api_key' => env('SAFEPAY_SECRET_KEY'),  // Secret key (hex) for passport auth
+                'api_key' => env('SAFEPAY_SECRET_KEY'),
                 'api_base' => env('SAFEPAY_API_BASE'),
             ]);
 
-            // Create temporary bearer token (TBT)
             $tbt = $safepay_passport->passport->create();
 
-            // Construct hosted redirect URL
-            $checkoutURL = \Safepay\Checkout::constructURL([
-                'environment' => 'sandbox',
+            // 5) Construct checkout URL with proper redirect URLs
+            $successUrl = route('payment.success', $order->id);
+            $cancelUrl = route('payment.cancel', $order->id);
+
+            \Log::info('SafePay checkout URL construction', [
+                'order_id' => $order->id,
                 'tracker' => $session->tracker->token,
-                'tbt' => $tbt->token,
-                'source' => 'website',
-                'cancel_url' => 'https://pakfumes.com/cancel',
-                'redirect_url' => 'https://pakfumes.com/success'
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl
             ]);
 
-            // Return URL to frontend
+            $checkoutURL = Checkout::constructURL([
+                'environment' => env('SAFEPAY_ENV', 'sandbox'),
+                'tracker' => $session->tracker->token,
+                'tbt' => $tbt->token,
+                'source' => 'custom',
+                'cancel_url' => $cancelUrl,
+                'redirect_url' => $successUrl,
+            ]);
+
+            \Log::info('Generated SafePay checkout URL', ['url' => $checkoutURL]);
+
             return response()->json(['url' => $checkoutURL]);
+
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            \Log::error('Safepay checkout error: ' . $e->getMessage());
+            return response()->json(['error' => 'Payment setup failed'], 500);
         }
+    }
+
+    // Step 2: Success redirect → verify payment
+    // public function paymentSuccess(Request $request, $orderId)
+    // {
+    //     $order = Order::findOrFail($orderId);
+
+    //     try {
+    //         $safepay = new SafepayClient([
+    //             'api_key' => env('SAFEPAY_SECRET_KEY'), // secret key for verification
+    //             'api_base' => env('SAFEPAY_API_BASE'),
+    //         ]);
+
+    //         // Verify tracker status
+    //         $status = $safepay->order->verify(['tracker' => $order->tracker]);
+
+    //         if ($status->status === 'PAID') {
+    //             $order->update(['status' => 'paid']);
+    //             return redirect()->route('order.show', $orderId)
+    //                 ->with('success', 'Payment successful');
+    //         } else {
+    //             $order->update(['status' => 'failed']);
+    //             return redirect()->route('order.show', $orderId)
+    //                 ->with('error', 'Payment failed');
+    //         }
+    //     } catch (\Exception $e) {
+    //         return redirect()->route('order.show', $orderId)
+    //             ->with('error', 'Verification error');
+    //     }
+    // }
+    public function paymentSuccess(Request $request, $orderId)
+    {
+        // Add headers to prevent CloudFlare timeout issues
+        header('Connection: keep-alive');
+        header('Keep-Alive: timeout=300, max=1000');
+
+        $order = Order::findOrFail($orderId);
+        \Log::info('Payment success redirect received', [
+            'order_id' => $orderId,
+            'tracker' => $order->tracker,
+            'url_params' => $request->all()
+        ]);
+        exit;
+
+        // Get tracker from URL params (SafePay appends ?tracker=track_...&reference=... on success)
+        $tracker = $request->query('tracker');
+        $reference = $request->query('reference');  // Optional: Store for reconciliation
+        $tbt = $request->query('tbt'); // Get TBT from URL
+
+        if (!$tracker) {
+            \Log::error('SafePay verification failed: No tracker found', [
+                'order_id' => $orderId,
+                'url_params' => $request->all()
+            ]);
+            return redirect()->route('order.show', $orderId)
+                ->with('error', 'Payment verification failed - missing tracker');
+        }
+
+        try {
+            // Use HTTP verification as primary method since SDK verify() doesn't exist
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . env('SAFEPAY_SECRET_KEY'),
+                'Content-Type' => 'application/json',
+            ])->post(env('SAFEPAY_API_BASE') . '/order/v1/verify', [
+                        'tracker' => $tracker,
+                    ]);
+
+            \Log::info('SafePay verification request', [
+                'order_id' => $orderId,
+                'tracker' => $tracker,
+                'response_status' => $response->status(),
+                'response_body' => $response->json()
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                // Handle different response structures
+                $paymentState = $data['data']['status'] ?? $data['data']['state'] ?? $data['status'] ?? $data['state'] ?? null;
+
+                if ($paymentState === 'PAID' || $paymentState === 'TRACKER_COMPLETED') {  // Success state
+                    $order->update([
+                        'status' => 'paid',
+                        'payment_reference' => $reference ?: ($data['data']['reference'] ?? $data['reference'] ?? null),
+                        'verified_at' => now()
+                    ]);
+
+                    \Log::info('Payment successfully verified and marked as paid', [
+                        'order_id' => $orderId,
+                        'tracker' => $tracker,
+                        'reference' => $reference
+                    ]);
+
+                    return redirect()->route('order.show', $orderId)
+                        ->with('success', 'Payment verified and marked as Paid ✅');
+                } else {
+                    $order->update(['status' => 'failed']);
+
+                    \Log::warning('Payment verification returned non-completed state', [
+                        'order_id' => $orderId,
+                        'tracker' => $tracker,
+                        'state' => $paymentState
+                    ]);
+
+                    return redirect()->route('order.show', $orderId)
+                        ->with('error', 'Payment failed - State: ' . ($paymentState ?: 'Unknown'));
+                }
+            } else {
+                \Log::error('SafePay API verification failed', [
+                    'order_id' => $orderId,
+                    'tracker' => $tracker,
+                    'status_code' => $response->status(),
+                    'response_body' => $response->body()
+                ]);
+
+                return redirect()->route('order.show', $orderId)
+                    ->with('error', 'Payment verification failed - API Error: ' . $response->status());
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('SafePay verification exception', [
+                'order_id' => $orderId,
+                'tracker' => $tracker,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('order.show', $orderId)
+                ->with('error', 'Payment verification failed - ' . $e->getMessage());
+        }
+    }
+
+
+    // Step 3: Cancel redirect
+    public function paymentCancel($orderId)
+    {
+        $order = Order::findOrFail($orderId);
+        $order->update(['status' => 'failed']);
+        return redirect()->route('order.show', $orderId)
+            ->with('error', 'Payment cancelled');
     }
 }

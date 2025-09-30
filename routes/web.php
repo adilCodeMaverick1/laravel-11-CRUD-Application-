@@ -21,8 +21,8 @@ Route::get('/checkout/now', [PaymentController::class, 'pageCheckout'])->name('p
 Route::post('/checkout/pay', [PaymentController::class, 'initiatePayment'])->name('payment.initiate');
 
 // Routes for handling PayFast callbacks
-Route::get('/payment/success', [PaymentController::class, 'handleSuccess'])->name('payment.success');
-Route::get('/payment/cancel', [PaymentController::class, 'handleCancel'])->name('payment.cancel');
+Route::get('/payment/success', [PaymentController::class, 'handleSuccess'])->name('payment.success1');
+Route::get('/payment/cancel', [PaymentController::class, 'handleCancel'])->name('payment.cancel1');
 Route::post('/payment/notify', [PaymentController::class, 'handleNotification'])->name('payment.notify');
 Route::middleware('auth')->group(function () {
     Route::resource("blog", BlogController::class);
@@ -127,5 +127,62 @@ Route::post('/razorpay/payment', [RazorpayController::class, 'payment'])->name('
 Route::post('/razorpay/success', [RazorpayController::class, 'success'])->name('razorpay.success');
 
 //safepay
-Route::get('/safepay', [PaymentController::class, 'SafepayCheckout'])->name('safepay.page');
+// Route::get('/safepay', [PaymentController::class, 'SafepayCheckout'])->name('safepay.page');
+
+
+// Route::get('/payment/success/{order}', [PaymentController::class, 'paymentSuccess'])->name('payment.success');
+Route::get('/payment/cancel/{order}', [PaymentController::class, 'paymentCancel'])->name('payment.cancel');
+
+// Test route to manually verify payment
+Route::get('/test-payment/{order}', function (App\Models\Order $order) {
+    return view('test-payment', compact('order'));
+})->name('test.payment');
+
+// Debug route to test SafePay API endpoints
+Route::get('/debug-safepay/{tracker}', function ($tracker) {
+    $results = [];
+
+    // Test the correct verification endpoint
+    try {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('SAFEPAY_SECRET_KEY'),
+            'Content-Type' => 'application/json',
+        ])->post(env('SAFEPAY_API_BASE') . '/order/v1/verify', [
+                    'tracker' => $tracker,
+                ]);
+
+        $results['/order/v1/verify (POST)'] = [
+            'status' => $response->status(),
+            'body' => $response->json() ?: $response->body(),
+        ];
+    } catch (Exception $e) {
+        $results['/order/v1/verify (POST)'] = [
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    // Also test if we can get tracker info differently
+    try {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('SAFEPAY_SECRET_KEY'),
+            'Content-Type' => 'application/json',
+        ])->get(env('SAFEPAY_API_BASE') . '/order/' . $tracker);
+
+        $results['/order/{tracker} (GET)'] = [
+            'status' => $response->status(),
+            'body' => $response->json() ?: $response->body(),
+        ];
+    } catch (Exception $e) {
+        $results['/order/{tracker} (GET)'] = [
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    return response()->json($results);
+})->name('debug.safepay');
+
+// Example: Order view route
+Route::get('/orders/{order}', function (App\Models\Order $order) {
+    return view('orders.show', compact('order'));
+})->name('order.show');
 require __DIR__ . '/auth.php';
