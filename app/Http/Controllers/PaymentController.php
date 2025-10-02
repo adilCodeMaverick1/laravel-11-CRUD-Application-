@@ -270,7 +270,7 @@ class PaymentController extends Controller
                 'environment' => env('SAFEPAY_ENV', 'sandbox'),
                 'tracker' => $session->tracker->token,
                 'tbt' => $tbt->token,
-                'source' => 'custom',
+                'source' => 'hosted',
                 'cancel_url' => $cancelUrl,
                 'redirect_url' => $successUrl,
             ]);
